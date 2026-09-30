@@ -11,10 +11,11 @@ Zeigt an, wieviel unter jedes Rad (VL/VR/HL/HR) gelegt werden muss, damit das Wo
 | Datei | Inhalt |
 |---|---|
 | `mpu6050.yaml` | Gerätekonfiguration |
-| `custom_mpu/` | lokale Komponente `mpu6050mod` (external_components) |
+| `custom_mpu/mpu6050mod/` | ESPHome-`mpu6050` + Hardware-Tiefpass 21 Hz (Details dort) |
 | `.basics.yaml` | kommt aus [esphome_basics](https://github.com/CzarofAK/esphome_basics) (API, OTA, WiFi, Logger, Diagnose) |
 
 ## Funktionsweise
+- Sensor-Tiefpass (DLPF) 21 Hz, weil bei laufendem Motor nivelliert wird.
 - MPU6050 wird alle 50 ms abgetastet, gleitender Mittelwert über 20 Werte (1 s).
 - Kalibrierung (Offset/Multiplikator je Achse) und Winkelberechnung laufen 1×/s intern auf dem ESP.
 - Einbau-Offsets Roll/Pitch sind `number`-Entitäten auf dem ESP (im Flash gespeichert),

@@ -5,3 +5,7 @@ secrets.yaml
 **/.piolibdeps/
 *.bin
 *.elf
+
+# kommt aus CzarofAK/ESPhome_basics
+.basics.yaml
+__pycache__/
