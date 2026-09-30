@@ -1,0 +1,403 @@
+substitutions:
+  name: mpu6050
+
+packages:
+  basics: !include .basics.yaml
+
+esphome:
+  name: ${name}
+  friendly_name: ${name}
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+preferences:
+  flash_write_interval: 1min   # schont den Flash
+
+external_components:
+  - source:
+      type: local
+      path: custom_mpu
+
+############################################
+# Interfaces Start
+############################################
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: True
+  id: i2c_bus_a
+  #frequency: 400kHz # laeuft mit 800 aber laut doku 400 kHz
+############################################
+# Interfaces End
+############################################
+
+############################################################
+# Globale Variablen
+############################################################
+
+globals:
+  # --- Kalibrationswerte MPU6050 (Beschleunigung) ---
+  - id: mpu_accel_x_offset
+    type: float
+    initial_value: '-0.32'
+  - id: mpu_accel_x_multiply
+    type: float
+    initial_value: '1.0032'
+
+  - id: mpu_accel_y_offset
+    type: float
+    initial_value: '0.00'
+  - id: mpu_accel_y_multiply
+    type: float
+    initial_value: '1.0002'   # war urspruenglich 0.0002 -> korrigiert
+
+  - id: mpu_accel_z_offset
+    type: float
+    initial_value: '-0.7424'
+  - id: mpu_accel_z_multiply
+    type: float
+    initial_value: '0.9697'
+
+  # --- Korrigierte Beschleunigungswerte (nur intern) ---
+  - id: mpu_accel_x_korr_gl
+    type: float
+    initial_value: '0.0'
+  - id: mpu_accel_y_korr_gl
+    type: float
+    initial_value: '0.0'
+  - id: mpu_accel_z_korr_gl
+    type: float
+    initial_value: '9.81'
+
+  # --- Fahrzeuggeometrie in cm ---
+  - id: spurweite_vorne_ha
+    type: float
+    initial_value: '189'
+  - id: spurweite_hinten_ha
+    type: float
+    initial_value: '176'
+  - id: achsabstand_ha
+    type: float
+    initial_value: '380'
+
+  # --- Lage ---
+  - id: roll_gl
+    type: float
+    initial_value: '0.0'
+  - id: pitch_gl
+    type: float
+    initial_value: '0.0'
+
+  # Diagnose: vorzeichenbehaftete Hoehendifferenz quer/laengs
+  - id: roll_raw_cm_gl
+    type: float
+    initial_value: '0.0'
+  - id: pitch_raw_cm_gl
+    type: float
+    initial_value: '0.0'
+
+  # --- Unterleghoehe je Rad in cm (immer >= 0) ---
+  - id: womo_vl
+    type: float
+    initial_value: '0.0'
+  - id: womo_vr
+    type: float
+    initial_value: '0.0'
+  - id: womo_hl
+    type: float
+    initial_value: '0.0'
+  - id: womo_hr
+    type: float
+    initial_value: '0.0'
+
+############################################################
+# Einbau-Offsets: direkt auf dem ESP, bleiben im Flash
+############################################################
+
+number:
+  - platform: template
+    name: "Roll Einbau Offset"
+    id: roll_einbau_num
+    icon: mdi:angle-acute
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: -15
+    max_value: 15
+    step: 0.01
+    mode: box
+    unit_of_measurement: "°"
+    entity_category: config
+
+  - platform: template
+    name: "Pitch Einbau Offset"
+    id: pitch_einbau_num
+    icon: mdi:angle-acute
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: -15
+    max_value: 15
+    step: 0.01
+    mode: box
+    unit_of_measurement: "°"
+    entity_category: config
+
+############################################################
+# Sensoren
+############################################################
+
+sensor:
+  # Uptime: sichtbar lassen (zeigt Reboots), aber nur 1x/min
+  - platform: uptime
+    name: Uptime Sensor
+    id: uptime_sensor
+    update_interval: 60s
+    entity_category: diagnostic
+
+############################################################
+# MPU6050 Anfang
+# 50 ms Abtastung, Mittel ueber 20 Werte (1 s), Ausgabe alle 0.5 s
+############################################################
+
+  - platform: mpu6050mod
+    i2c_id: i2c_bus_a
+    address: 0x68
+    update_interval: 50ms
+    accel_x:
+      name: "WOMO Accel X"
+      id: accel_x
+      internal: true
+      filters:
+        - sliding_window_moving_average:
+            window_size: 20
+            send_every: 10
+      accuracy_decimals: 3
+
+    accel_y:
+      name: "WOMO Accel Y"
+      id: accel_y
+      internal: true
+      filters:
+        - sliding_window_moving_average:
+            window_size: 20
+            send_every: 10
+      accuracy_decimals: 3
+
+    accel_z:
+      name: "WOMO Accel Z"
+      id: accel_z
+      internal: true
+      filters:
+        - sliding_window_moving_average:
+            window_size: 20
+            send_every: 10
+      accuracy_decimals: 3
+
+    temperature:
+      name: "MPU Temperatur"
+      id: mpu_temperatur
+      internal: true
+      filters:
+        - sliding_window_moving_average:
+            window_size: 20
+            send_every: 10
+
+############################################################
+# Rechenkern: laeuft 1x pro Sekunde (nur intern)
+############################################################
+
+  - platform: template
+    name: MPU update tilt
+    id: mpu_update_tilt
+    internal: true
+    update_interval: 1s
+    lambda: |-
+      static float update_count = 0;
+
+      // --- 1) Rohwerte kalibrieren ---
+      id(mpu_accel_x_korr_gl) = (id(accel_x).state + id(mpu_accel_x_offset)) * id(mpu_accel_x_multiply);
+      id(mpu_accel_y_korr_gl) = (id(accel_y).state + id(mpu_accel_y_offset)) * id(mpu_accel_y_multiply);
+      id(mpu_accel_z_korr_gl) = (id(accel_z).state + id(mpu_accel_z_offset)) * id(mpu_accel_z_multiply);
+
+      const float ax = id(mpu_accel_x_korr_gl);
+      const float ay = id(mpu_accel_y_korr_gl);
+      const float az = id(mpu_accel_z_korr_gl);
+
+      // Kalibrierhilfe: im ESPHome-Log (Level DEBUG) sichtbar statt als HA-Entitaet
+      ESP_LOGD("mpu", "raw x=%.4f y=%.4f z=%.4f | korr x=%.4f y=%.4f z=%.4f",
+               id(accel_x).state, id(accel_y).state, id(accel_z).state, ax, ay, az);
+
+      // --- 2) Winkel aus Beschleunigung ---
+      // Einbaulage: Sensorachsen gegenueber Fahrzeug gedreht -> Vorzeichen fix invertiert
+      // roll  + = rechts runter
+      // pitch + = vorne runter
+      float roll  = atan2f(-ay, sqrtf(ax * ax + az * az)) * 180.0f / PI;
+      float pitch = atan2f( ax, sqrtf(ay * ay + az * az)) * 180.0f / PI;
+
+      // --- 3) Einbaulage kompensieren (Offsets in Grad) ---
+      roll  -= id(roll_einbau_num).state;
+      pitch -= id(pitch_einbau_num).state;
+
+      id(roll_gl)  = roll;
+      id(pitch_gl) = pitch;
+
+      const float sr = sinf(roll  * PI / 180.0f);
+      const float sp = sinf(pitch * PI / 180.0f);
+
+      const float A  = id(achsabstand_ha);
+      const float Sv = id(spurweite_vorne_ha);
+      const float Sh = id(spurweite_hinten_ha);
+
+      // --- 4) Relative Hoehe der vier Aufstandspunkte (Fahrzeugmitte = 0) ---
+      const float h_vl = -sp * A * 0.5f + sr * Sv * 0.5f;
+      const float h_vr = -sp * A * 0.5f - sr * Sv * 0.5f;
+      const float h_hl =  sp * A * 0.5f + sr * Sh * 0.5f;
+      const float h_hr =  sp * A * 0.5f - sr * Sh * 0.5f;
+
+      // --- 5) Hoechstes Rad ist die Referenz ---
+      float h_max = h_vl;
+      if (h_vr > h_max) h_max = h_vr;
+      if (h_hl > h_max) h_max = h_hl;
+      if (h_hr > h_max) h_max = h_hr;
+
+      // --- 6) Unterleghoehe je Rad, immer >= 0 ---
+      id(womo_vl) = h_max - h_vl;
+      id(womo_vr) = h_max - h_vr;
+      id(womo_hl) = h_max - h_hl;
+      id(womo_hr) = h_max - h_hr;
+
+      // --- Diagnose: vorzeichenbehaftet, enthaelt die Richtungsinfo ---
+      id(roll_raw_cm_gl)  = sr * Sv;
+      id(pitch_raw_cm_gl) = sp * A;
+
+      update_count += 1;
+      return update_count;
+
+############################################################
+# Ausgabe-Sensoren (an HA)
+# Berechnung weiterhin 1x/s, gesendet wird nur bei Aenderung
+# (nach Rundung) oder spaetestens alle 60 s als Lebenszeichen.
+############################################################
+
+  - platform: template
+    name: Roll
+    id: roll
+    accuracy_decimals: 2
+    unit_of_measurement: '°'
+    update_interval: 1s
+    lambda: |-
+      return (id(roll_gl));
+    filters:
+      - round: 2
+      - or:
+          - delta: 0.05
+          - throttle: 60s
+
+  - platform: template
+    name: Pitch
+    id: pitch
+    accuracy_decimals: 2
+    unit_of_measurement: '°'
+    update_interval: 1s
+    lambda: |-
+      return (id(pitch_gl));
+    filters:
+      - round: 2
+      - or:
+          - delta: 0.05
+          - throttle: 60s
+
+  - platform: template
+    name: Roll cm
+    id: roll_cm
+    accuracy_decimals: 1
+    unit_of_measurement: 'cm'
+    update_interval: 1s
+    lambda: |-
+      return (id(roll_raw_cm_gl));
+    filters:
+      - round: 1
+      - or:
+          - delta: 0.2
+          - throttle: 60s
+
+  - platform: template
+    name: Pitch cm
+    id: pitch_cm
+    accuracy_decimals: 1
+    unit_of_measurement: 'cm'
+    update_interval: 1s
+    lambda: |-
+      return (id(pitch_raw_cm_gl));
+    filters:
+      - round: 1
+      - or:
+          - delta: 0.2
+          - throttle: 60s
+
+  - platform: template
+    name: WOMO VL cm
+    id: womo_vl_cm
+    icon: mdi:arrow-up-bold-box-outline
+    accuracy_decimals: 1
+    unit_of_measurement: 'cm'
+    update_interval: 1s
+    lambda: |-
+      return (id(womo_vl));
+    filters:
+      - round: 1
+      - or:
+          - delta: 0.2
+          - throttle: 60s
+
+  - platform: template
+    name: WOMO VR cm
+    id: womo_vr_cm
+    icon: mdi:arrow-up-bold-box-outline
+    accuracy_decimals: 1
+    unit_of_measurement: 'cm'
+    update_interval: 1s
+    lambda: |-
+      return (id(womo_vr));
+    filters:
+      - round: 1
+      - or:
+          - delta: 0.2
+          - throttle: 60s
+
+  - platform: template
+    name: WOMO HL cm
+    id: womo_hl_cm
+    icon: mdi:arrow-up-bold-box-outline
+    accuracy_decimals: 1
+    unit_of_measurement: 'cm'
+    update_interval: 1s
+    lambda: |-
+      return (id(womo_hl));
+    filters:
+      - round: 1
+      - or:
+          - delta: 0.2
+          - throttle: 60s
+
+  - platform: template
+    name: WOMO HR cm
+    id: womo_hr_cm
+    icon: mdi:arrow-up-bold-box-outline
+    accuracy_decimals: 1
+    unit_of_measurement: 'cm'
+    update_interval: 1s
+    lambda: |-
+      return (id(womo_hr));
+    filters:
+      - round: 1
+      - or:
+          - delta: 0.2
+          - throttle: 60s
+
+############################################################
+# MPU6050 Ende
+############################################################
