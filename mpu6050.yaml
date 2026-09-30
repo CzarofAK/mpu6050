@@ -16,9 +16,9 @@ preferences:
   flash_write_interval: 1min   # schont den Flash
 
 external_components:
-  - source:
-      type: local
-      path: custom_mpu
+  # mpu6050mod = ESPHome mpu6050 + einstellbarer Hardware-Tiefpass (DLPF)
+  - source: github://CzarofAK/mpu6050@v1.0.0
+    components: [mpu6050mod]
 
 ############################################
 # Interfaces Start
@@ -166,6 +166,7 @@ sensor:
     i2c_id: i2c_bus_a
     address: 0x68
     update_interval: 50ms
+    dlpf: 21hz   # Motorvibration vor der Abtastung filtern (5/10/21/44/94/184/260hz)
     accel_x:
       name: "WOMO Accel X"
       id: accel_x

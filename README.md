@@ -11,7 +11,7 @@ Zeigt an, wieviel unter jedes Rad (VL/VR/HL/HR) gelegt werden muss, damit das Wo
 | Datei | Inhalt |
 |---|---|
 | `mpu6050.yaml` | Gerätekonfiguration |
-| `custom_mpu/mpu6050mod/` | ESPHome-`mpu6050` + Hardware-Tiefpass 21 Hz (Details dort) |
+| `components/mpu6050mod/` | External Component: ESPHome-`mpu6050` + einstellbarer Hardware-Tiefpass (Details dort) |
 | `.basics.yaml` | kommt aus [esphome_basics](https://github.com/CzarofAK/esphome_basics) (API, OTA, WiFi, Logger, Diagnose) |
 
 ## Funktionsweise
@@ -28,4 +28,5 @@ Zeigt an, wieviel unter jedes Rad (VL/VR/HL/HR) gelegt werden muss, damit das Wo
 Spurweite vorne 189 cm, hinten 176 cm, Achsabstand 380 cm.
 
 ## Historie
+- 2026-09-30 v1.0.0: Komponente als External Component von GitHub, `dlpf` einstellbar, eigener Namespace.
 - 2026-09-30: Accel-Template-Sensoren entfernt, Zwischenwerte `internal`, Ausgaben gedrosselt (YouTrack FRA-96).
