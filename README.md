@@ -38,4 +38,4 @@ Spurweite vorne 189 cm, hinten 176 cm, Achsabstand 380 cm.
 
 ## Lizenz
 
-MIT, siehe [LICENSE](LICENSE). Nutzung auf eigene Gefahr – siehe [DISCLAIMER.md](DISCLAIMER.md).
+MIT, siehe [LICENSE](LICENSE) – **ausser** dem C++-Code in `components/mpu6050mod/`: der stammt von der ESPHome-Komponente ab und steht wie dort unter **GPL-3.0**. Details: [NOTICE.md](NOTICE.md). Nutzung auf eigene Gefahr – siehe [DISCLAIMER.md](DISCLAIMER.md).
