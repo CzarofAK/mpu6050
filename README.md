@@ -3,6 +3,11 @@
 ESPHome-Konfiguration für den Nivelliersensor im Wohnmobil (FRAM).
 Zeigt an, wieviel unter jedes Rad (VL/VR/HL/HR) gelegt werden muss, damit das Womo waagrecht steht.
 
+> [!WARNING]
+> **Sicherheit & Haftung / Safety & liability** – Privates Hobbyprojekt, bereitgestellt «wie besehen», Nutzung **auf eigene Gefahr**.
+> Die angezeigten Unterleghöhen können falsch sein (Einbau, Kalibrierung, Vibration). Fahrzeug immer gegen Wegrollen sichern (Handbremse, Gang, Keile), Auffahrkeile nach Herstellerangaben verwenden und nicht unter ein aufgebocktes Fahrzeug greifen.
+> Details: [DISCLAIMER.md](DISCLAIMER.md) (DE/EN).
+
 ## Hardware
 - D1 Mini (ESP8266)
 - MPU6050 über I2C (SDA GPIO4, SCL GPIO5, Adresse 0x68)
@@ -30,3 +35,7 @@ Spurweite vorne 189 cm, hinten 176 cm, Achsabstand 380 cm.
 ## Historie
 - 2026-09-30 v1.0.0: Komponente als External Component von GitHub, `dlpf` einstellbar, eigener Namespace.
 - 2026-09-30: Accel-Template-Sensoren entfernt, Zwischenwerte `internal`, Ausgaben gedrosselt (YouTrack FRA-96).
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE). Nutzung auf eigene Gefahr – siehe [DISCLAIMER.md](DISCLAIMER.md).
